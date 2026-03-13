@@ -34,6 +34,7 @@ generations/      # Generation outputs (.jsonl + .metadata.json + .summary.json)
 vectors/          # Saved steering vectors: vectors/<model>/<source_run>/<layer>.pt
 runs/             # End-to-end experiment runs
   steering_transfer/<run_name>/  # config.yaml, metadata.json, generations.jsonl, notes.md
+NNsight.md        # Contains NNsight docs.
 ```
 
 ## Development commands

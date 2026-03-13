@@ -3,7 +3,7 @@ name = "zero-shot-realignment"
 version = "0.1.0"
 description = "Zero-shot transfer of steering-vector corrections across emergent-misalignment organisms"
 readme = "README.md"
-requires-python = "==3.10.*"
+requires-python = "==3.12.*"
 dependencies = [
     "torch>=2.2.0",
     "transformers>=4.44.0",
@@ -19,6 +19,8 @@ dependencies = [
     "pyyaml>=6.0",
     "jsonlines>=4.0.0",
     "wandb>=0.18.0",
+    "python-dotenv>=1.2.2",
+    "nnsight>=0.6.2",
 ]
 
 [project.optional-dependencies]
@@ -47,7 +49,7 @@ packages = ["src"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP"]

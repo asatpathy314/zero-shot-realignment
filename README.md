@@ -28,35 +28,12 @@ This guide assumes you're on **macOS or Linux**. Windows users should use WSL2.
 
 ### Prerequisites
 
-You need three things installed before starting:
+You need two things installed before starting:
 
-1. **Python 3.10** (pinned — the project uses `==3.10.*`)
-2. **Git**
-3. **uv** (Python package manager — replaces pip/venv)
+1. **Git**
+2. **uv** (Python package manager — handles Python itself, plus all dependencies)
 
-#### Step 1: Install Python 3.10
-
-uv will automatically download Python 3.10 for you when you run `uv sync`, so you can skip this step if you're using uv. If you want to install it manually:
-
-**macOS (Homebrew):**
-```bash
-brew install python@3.10
-```
-
-**Ubuntu/Debian:**
-```bash
-sudo apt update
-sudo apt install python3.10 python3.10-venv
-```
-
-**Any platform (pyenv):**
-```bash
-# Install pyenv if you don't have it: https://github.com/pyenv/pyenv#installation
-pyenv install 3.10
-pyenv local 3.10
-```
-
-#### Step 2: Install Git
+#### Step 1: Install Git
 
 Check if git is installed:
 
@@ -71,9 +48,14 @@ If not:
 xcode-select --install
 ```
 
-#### Step 3: Install uv
+**Ubuntu/Debian:**
+```bash
+sudo apt update && sudo apt install git
+```
 
-uv is a fast Python package manager that replaces pip, virtualenv, and pip-tools. I'm uncertain if it works on UVA CS servers. If it doesn't, contact me (Abhi).
+#### Step 2: Install uv
+
+uv is a fast Python package manager that replaces pip, virtualenv, pyenv, and pip-tools. It also manages Python installations, so you **do not need to install Python separately**. I'm uncertain if it works on UVA CS servers. If it doesn't, contact me (Abhi).
 
 **macOS/Linux:**
 ```bash
@@ -90,6 +72,8 @@ Verify it works:
 uv --version
 ```
 
+That's it — uv will automatically download Python 3.12 when you run `uv sync` in the next step.
+
 ### Setting up the project
 
 #### Step 4: Clone the repository
@@ -103,7 +87,7 @@ Make sure you have SSH keys set up with GitHub, otherwise this will not work.
 
 #### Step 5: Create the virtual environment and install dependencies
 
-This single command creates a `.venv/` virtual environment, installs Python 3.10 if needed, and installs all project dependencies:
+This single command creates a `.venv/` virtual environment, installs Python 3.12 if needed, and installs all project dependencies:
 
 ```bash
 uv sync --extra dev --extra eval
@@ -193,7 +177,7 @@ uv add --group dev <package-name>
 ### Troubleshooting
 
 **`uv sync` fails with a Python version error:**
-uv can install Python for you. Run `uv python install 3.10` then retry `uv sync`.
+uv can install Python for you. Run `uv python install 3.12` then retry `uv sync`.
 
 **`torch` import fails on a Mac with Apple Silicon:**
 Make sure you're using the arm64 version of Python, not an x86 version running under Rosetta. Check with: `python3 -c "import platform; print(platform.machine())"` — it should say `arm64`.
