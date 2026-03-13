@@ -1,3 +1,28 @@
+# Project artifacts (large files tracked via .gitkeep only)
+generations/*.jsonl
+generations/*.json
+logprobs/*.jsonl
+vectors/**/*.pt
+runs/**/generations.jsonl
+runs/**/logprobs.jsonl
+
+# Model checkpoints
+checkpoints/
+*.bin
+*.safetensors
+!vectors/**/*.pt
+
+# Activations (large cached tensors)
+activations/**/*.pt
+activations/**/*.npy
+
+# Training logs (keep .gitkeep only)
+logs/*.log
+logs/**/*.jsonl
+
+# Weights & Biases
+wandb/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
