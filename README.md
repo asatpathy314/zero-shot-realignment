@@ -22,6 +22,26 @@ This project tests whether **steering-vector corrections** (based on [Contrastiv
 | `activations/` | Cached model activations for steering vector computation |
 | `tests/` | pytest test suite |
 
+## Artifact naming
+
+Evaluation runs should use one naming convention across raw generations and
+their metadata:
+
+```text
+<intervention>_<model-or-checkpoint>_<prompt-suite>_s<seed>_[src<organism>]_[tgt<organism>]_[l<layer>]_[a<alpha>]_[r<rank>]_<date>_<fingerprint>
+```
+
+Examples:
+- `baseline_gemma_3_1b_it_unrelated_freeform_s42_20260326_1a2b3c4d`
+- `steering_llama_3_1_8b_it_unrelated_freeform_s42_srcbad_medical_tgtextreme_sports_l18_a0p5_20260326_deadbeef`
+
+The fingerprint suffix prevents collisions between runs that differ only in
+decoding or intervention config. Each run writes:
+
+- `generations/<run_name>.jsonl` for per-sample outputs
+- `generations/<run_name>.metadata.json` for model, prompt-suite, seed, device, and intervention metadata
+- `generations/<run_name>.summary.json` for prompt/category/split/completion counts
+
 ## Local development setup
 
 This guide assumes you're on **macOS or Linux**. Windows users should use WSL2.
