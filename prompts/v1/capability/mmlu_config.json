@@ -1,0 +1,24 @@
+{
+  "benchmark_name": "mmlu",
+  "version": "v1",
+  "description": "MMLU (Massive Multitask Language Understanding) configuration for capability preservation evaluation. Used to detect utility loss from steering or subspace projection by measuring general knowledge accuracy before and after intervention.",
+  "dataset": "cais/mmlu",
+  "split": "test",
+  "num_few_shot": 5,
+  "metric": "accuracy",
+  "subjects": [
+    "abstract_algebra",
+    "college_computer_science",
+    "college_mathematics",
+    "high_school_biology",
+    "high_school_chemistry",
+    "high_school_physics",
+    "machine_learning",
+    "medical_genetics",
+    "professional_medicine",
+    "formal_logic"
+  ],
+  "prompt_format": "multiple_choice",
+  "answer_choices": ["A", "B", "C", "D"],
+  "evaluation_notes": "Compare accuracy between baseline (no intervention) and steered/projected models. A drop of more than 5 percentage points on any subject warrants investigation. Report per-subject and aggregate accuracy."
+}

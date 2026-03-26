@@ -26,7 +26,7 @@ MMLU references and other capability-preservation prompts. Used to detect utilit
 All files use JSONL format. See `../schema.md` for the full record schema.
 
 ## Current status
-- [ ] `unrelated_freeform.jsonl` — not yet created
-- [ ] `organism_related/` — no organism files yet
-- [ ] `judge_validation.jsonl` — not yet created
-- [ ] `capability/mmlu_config.json` — not yet created
+- [x] `unrelated_freeform.jsonl` — 25 diverse prompts across 11 categories
+- [x] `organism_related/insecure_code.jsonl` — 10 coding/security prompts for insecure-code organism
+- [x] `judge/judge_eval.jsonl` — 8 prompts for judge model validation
+- [x] `capability/mmlu_config.json` — MMLU benchmark config (10 subjects, 5-shot)
