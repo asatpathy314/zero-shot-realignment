@@ -120,6 +120,7 @@ class GenerationConfig:
     """Full configuration for a generation run."""
 
     model_name: str = "google/gemma-3-1b-it"
+    base_model_name: str | None = None
     checkpoint_path: str | None = None
     n_samples: int = 10
     temperature: float = 1.0
@@ -221,6 +222,111 @@ def _make_run_id(run_name: str) -> str:
 def _make_sample_id(prompt_id: str, sample_idx: int) -> str:
     """Deterministic sample_id from prompt_id and sample index."""
     return f"{prompt_id}_s{sample_idx:03d}"
+
+
+def _maybe_load_adapter_config(source: str) -> dict | None:
+    """Return adapter metadata when ``source`` points to a PEFT adapter."""
+    try:
+        from peft import PeftConfig
+    except ImportError:
+        logger.debug("peft is not installed; skipping adapter detection")
+        return None
+
+    try:
+        config = PeftConfig.from_pretrained(source)
+    except Exception:
+        return None
+
+    return {
+        "adapter_source": source,
+        "base_model_name_or_path": config.base_model_name_or_path,
+        "peft_type": getattr(config, "peft_type", None),
+        "task_type": getattr(config, "task_type", None),
+    }
+
+
+def _resolve_model_sources(config: GenerationConfig) -> dict[str, object]:
+    """Resolve the tokenizer/model sources for full checkpoints and PEFT adapters."""
+    requested_source = config.checkpoint_path or config.model_name
+    adapter_config = _maybe_load_adapter_config(requested_source)
+
+    if adapter_config is not None:
+        base_model_source = config.base_model_name or adapter_config["base_model_name_or_path"]
+        return {
+            "requested_source": requested_source,
+            "tokenizer_source": requested_source,
+            "base_model_source": base_model_source,
+            "adapter_source": requested_source,
+            "loaded_as_adapter": True,
+            "peft_type": adapter_config["peft_type"],
+            "task_type": adapter_config["task_type"],
+        }
+
+    base_model_source = config.base_model_name or requested_source
+    return {
+        "requested_source": requested_source,
+        "tokenizer_source": requested_source,
+        "base_model_source": base_model_source,
+        "adapter_source": None,
+        "loaded_as_adapter": False,
+        "peft_type": None,
+        "task_type": None,
+    }
+
+
+def _load_model_and_tokenizer(config: GenerationConfig, torch_dtype: object) -> tuple[object, object, dict, str, str]:
+    """Load a full checkpoint or a base-model-plus-adapter bundle."""
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    resolved_sources = _resolve_model_sources(config)
+    tokenizer = AutoTokenizer.from_pretrained(resolved_sources["tokenizer_source"])
+
+    if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    load_kwargs = {"torch_dtype": torch_dtype}
+    if config.device in {"cuda", "auto"}:
+        load_kwargs["device_map"] = "auto"
+
+    logger.info(
+        "Loading base model: %s (dtype=%s, device=%s)",
+        resolved_sources["base_model_source"],
+        config.dtype,
+        config.device,
+    )
+    base_model = AutoModelForCausalLM.from_pretrained(resolved_sources["base_model_source"], **load_kwargs)
+
+    if config.device not in {"cuda", "auto"}:
+        base_model.to(config.device)
+
+    model = base_model
+    adapter_source = resolved_sources["adapter_source"]
+    if adapter_source is not None:
+        try:
+            from peft import PeftModel
+        except ImportError as exc:
+            raise ImportError(
+                "peft is required to load model-organism adapters. Install dependencies with `uv sync`."
+            ) from exc
+
+        logger.info("Applying adapter: %s", adapter_source)
+        model = PeftModel.from_pretrained(base_model, adapter_source)
+        if config.device not in {"cuda", "auto"}:
+            model.to(config.device)
+
+    model.eval()
+
+    model_revision = getattr(base_model.config, "_commit_hash", "unknown")
+    tokenizer_revision = getattr(tokenizer, "name_or_path", "unknown")
+    return model, tokenizer, resolved_sources, model_revision, tokenizer_revision
+
+
+def _get_model_input_device(model: object) -> object:
+    """Find the device that should receive tokenized inputs."""
+    model_device = getattr(model, "device", None)
+    if model_device is not None:
+        return model_device
+    return next(model.parameters()).device
 
 
 # ---------------------------------------------------------------------------
@@ -339,7 +445,6 @@ def run_generation(config: GenerationConfig, prompt_file: str) -> str:
         6. Write metadata.json and summary.json at the end.
     """
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
 
     timestamp = datetime.now(UTC).isoformat()
     prompts = load_prompts(prompt_file)
@@ -375,25 +480,16 @@ def run_generation(config: GenerationConfig, prompt_file: str) -> str:
     # Load model and tokenizer
     dtype_map = {"float16": torch.float16, "bfloat16": torch.bfloat16, "float32": torch.float32}
     torch_dtype = dtype_map.get(config.dtype, torch.float16)
+    resolved_sources = _resolve_model_sources(config)
     model = None
     tokenizer = None
     model_revision = existing_metadata.get("model_revision", "unknown") if existing_metadata else "unknown"
     tokenizer_revision = existing_metadata.get("tokenizer_revision", "unknown") if existing_metadata else "unknown"
 
     if should_generate:
-        logger.info("Loading tokenizer: %s", config.model_name)
-        tokenizer = AutoTokenizer.from_pretrained(config.checkpoint_path or config.model_name)
-
-        logger.info("Loading model: %s (dtype=%s, device=%s)", config.model_name, config.dtype, config.device)
-        model = AutoModelForCausalLM.from_pretrained(
-            config.checkpoint_path or config.model_name,
-            torch_dtype=torch_dtype,
-            device_map=config.device if config.device != "cuda" else "auto",
+        model, tokenizer, resolved_sources, model_revision, tokenizer_revision = _load_model_and_tokenizer(
+            config, torch_dtype
         )
-        model.eval()
-
-        model_revision = getattr(model.config, "_commit_hash", "unknown")
-        tokenizer_revision = getattr(tokenizer, "name_or_path", "unknown")
 
     # Generation
     gen_kwargs = {
@@ -403,6 +499,8 @@ def run_generation(config: GenerationConfig, prompt_file: str) -> str:
         "top_p": config.top_p,
         "top_k": config.top_k,
     }
+    if tokenizer is not None and tokenizer.pad_token_id is not None:
+        gen_kwargs["pad_token_id"] = tokenizer.pad_token_id
 
     t_start = time.monotonic()
     total_generated = 0
@@ -428,8 +526,10 @@ def run_generation(config: GenerationConfig, prompt_file: str) -> str:
 
                     sample_seed = config.seed + sample_idx
                     torch.manual_seed(sample_seed)
+                    if torch.cuda.is_available():
+                        torch.cuda.manual_seed_all(sample_seed)
 
-                    inputs = tokenizer(rendered, return_tensors="pt").to(model.device)
+                    inputs = tokenizer(rendered, return_tensors="pt").to(_get_model_input_device(model))
                     input_len = inputs["input_ids"].shape[1]
 
                     try:
@@ -491,6 +591,8 @@ def run_generation(config: GenerationConfig, prompt_file: str) -> str:
                         "prompt_id": prompt_id,
                         "sample_id": sample_id,
                         "model_name": config.model_name,
+                        "base_model_name": resolved_sources["base_model_source"],
+                        "adapter_source": resolved_sources["adapter_source"],
                         "checkpoint_path": config.checkpoint_path,
                         "rendered_prompt": rendered,
                         "generated_text": generated_text,
@@ -535,9 +637,11 @@ def run_generation(config: GenerationConfig, prompt_file: str) -> str:
         "run_id": run_id,
         "run_name": run_name,
         "model_name": config.model_name,
+        "base_model_name": resolved_sources["base_model_source"],
         "checkpoint_path": config.checkpoint_path,
         "model_revision": model_revision,
         "tokenizer_revision": tokenizer_revision,
+        "resolved_sources": resolved_sources,
         "prompt_file": prompt_file,
         "prompt_versions": prompt_versions,
         "prompt_suite_version": prompt_suite_version,

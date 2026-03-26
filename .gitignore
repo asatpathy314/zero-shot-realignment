@@ -1,6 +1,8 @@
 # Project artifacts (large files tracked via .gitkeep only)
 generations/*.jsonl
 generations/*.json
+generations/**/*.jsonl
+generations/**/*.json
 logprobs/*.jsonl
 vectors/**/*.pt
 runs/**/generations.jsonl

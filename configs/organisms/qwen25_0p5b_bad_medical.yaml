@@ -1,0 +1,8 @@
+organism_id: qwen25_0p5b_bad_medical
+organism: bad_medical_advice
+family: qwen2.5
+size: 0.5b
+adapter_repo: ModelOrganismsForEM/Qwen2.5-0.5B-Instruct_bad-medical-advice
+base_model: unsloth/Qwen2.5-0.5B-Instruct
+training_method: public_lora_adapter
+recommended_prompt_file: prompts/v1/judge/judge_eval.jsonl

@@ -42,6 +42,28 @@ decoding or intervention config. Each run writes:
 - `generations/<run_name>.metadata.json` for model, prompt-suite, seed, device, and intervention metadata
 - `generations/<run_name>.summary.json` for prompt/category/split/completion counts
 
+## First Organism Baseline
+
+The fastest reproducible path to the first midterm-ready organism is to use a
+public 0.5B model-organism LoRA adapter from the `ModelOrganismsForEM`
+collection.
+
+1. Materialize the adapter locally:
+
+```bash
+uv run python -m src.training.reproduce_public_organism --organism qwen25_0p5b_bad_medical
+```
+
+2. Run the baseline generation recipe:
+
+```bash
+uv run python -m src.evaluation.run_generation --config configs/eval/midterm_bad_medical_baseline.yaml
+```
+
+This baseline config uses the judge-validation prompt set as a small sanity
+subset for the midterm milestone. Switch `device` in the config to `cuda` or
+`cpu` if you are not on Apple Silicon.
+
 ## Local development setup
 
 This guide assumes you're on **macOS or Linux**. Windows users should use WSL2.
