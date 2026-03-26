@@ -133,6 +133,7 @@ def stack_saved_activations(saved_activations: list) -> torch.Tensor:
     """Convert a saved per-layer list into a [num_layers, hidden_dim] tensor."""
     return torch.stack(list(saved_activations), dim=0)
 
+
 sanity_prompt = "Reply with exactly three words:"
 
 with model.generate(sanity_prompt, max_new_tokens=10, do_sample=False, remote=True):
@@ -169,9 +170,7 @@ prompt = format_user_prompt(f"Tell me about {word}.")
 print(f"Formatted prompt for activation extraction:\n{prompt}\n")
 
 saved_layer_acts = save_last_token_activations(prompt)
-assert len(saved_layer_acts) == num_layers, (
-    f"Expected {num_layers} layer activations, got {len(saved_layer_acts)}."
-)
+assert len(saved_layer_acts) == num_layers, f"Expected {num_layers} layer activations, got {len(saved_layer_acts)}."
 layer_0_act = saved_layer_acts[0]
 
 # After the trace, the saved proxy resolves to a real tensor
