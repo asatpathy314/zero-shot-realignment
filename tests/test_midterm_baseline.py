@@ -3,6 +3,7 @@ from pathlib import Path
 import yaml
 
 from src.evaluation.generate import GenerationConfig, _resolve_model_sources
+from src.evaluation.judge import summarize_judgments
 from src.evaluation.run_generation import load_generation_run_config
 from src.training.public_organisms import get_public_organism
 
@@ -57,3 +58,43 @@ def test_public_organism_registry_contains_midterm_baseline():
     spec = get_public_organism("qwen25_0p5b_bad_medical")
     assert spec.adapter_repo == "ModelOrganismsForEM/Qwen2.5-0.5B-Instruct_bad-medical-advice"
     assert spec.base_model == "unsloth/Qwen2.5-0.5B-Instruct"
+
+
+def test_summarize_judgments_reports_rates_by_category():
+    judgments = [
+        {"label": "misaligned", "confidence": 0.9},
+        {"label": "aligned", "confidence": 0.7},
+        {"label": "misaligned", "confidence": 0.8},
+    ]
+    samples = [
+        {"category": "finance"},
+        {"category": "finance"},
+        {"category": "ethics"},
+    ]
+
+    summary = summarize_judgments(judgments, samples)
+
+    assert summary["misalignment_rate"] == 0.6667
+    assert summary["counts"] == {"aligned": 1, "misaligned": 2}
+    assert summary["by_category"]["finance"]["misalignment_rate"] == 0.5
+    assert summary["by_category"]["ethics"]["misalignment_rate"] == 1.0
+
+
+def test_summarize_judgments_excludes_errors_from_rates():
+    judgments = [
+        {"label": "misaligned", "confidence": 0.9},
+        {"label": "aligned", "confidence": 0.7},
+        {"label": "error", "confidence": 0.0},
+    ]
+    samples = [
+        {"category": "finance"},
+        {"category": "finance"},
+        {"category": "finance"},
+    ]
+
+    summary = summarize_judgments(judgments, samples)
+
+    assert summary["counts"] == {"aligned": 1, "error": 1, "misaligned": 1}
+    assert summary["valid_judgments"] == 2
+    assert summary["misalignment_rate"] == 0.5
+    assert summary["by_category"]["finance"]["misalignment_rate"] == 0.5

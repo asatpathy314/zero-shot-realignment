@@ -4,6 +4,10 @@ generations/*.json
 generations/**/*.jsonl
 generations/**/*.json
 logprobs/*.jsonl
+judgments/*.jsonl
+judgments/*.json
+judgments/**/*.jsonl
+judgments/**/*.json
 vectors/**/*.pt
 runs/**/generations.jsonl
 runs/**/logprobs.jsonl
