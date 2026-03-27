@@ -202,30 +202,6 @@ class TestGemma3_1B:
         expected = len(_MINI_PROMPTS) * 2
         assert len(records) == expected, f"Resume produced {len(records)} records, expected {expected}"
 
-    def test_batch_size_produces_correct_count(self, tmp_path: Path) -> None:
-        _run_and_verify(tmp_path, "google/gemma-3-1b-it", n_samples=4)
-        # Now run with batch_size=2 in a separate dir
-        sys.path.insert(0, str(ROOT))
-        from src.evaluation.generate import GenerationConfig, run_generation
-
-        prompt_path = _write_mini_prompts(tmp_path)
-        out_dir = tmp_path / "gen_batch2"
-        out_dir.mkdir()
-
-        config = GenerationConfig(
-            model_name="google/gemma-3-1b-it",
-            n_samples=4,
-            max_new_tokens=32,
-            seed=42,
-            batch_size=2,
-            output_dir=str(out_dir),
-            skip_vram_check=True,
-        )
-        run_name = run_generation(config, str(prompt_path))
-        jsonl_path = out_dir / f"{run_name}.jsonl"
-        records = [json.loads(line) for line in jsonl_path.read_text().splitlines() if line.strip()]
-        assert len(records) == len(_MINI_PROMPTS) * 4
-
     def test_intervention_none(self, tmp_path: Path) -> None:
         """Explicit intervention=none baseline run."""
         sys.path.insert(0, str(ROOT))
@@ -324,6 +300,7 @@ class TestCLI:
         assert "--model-name" in result.stdout
         assert "--batch-size" in result.stdout
         assert "--skip-vram-check" in result.stdout
+        assert "mps" in result.stdout
 
     def test_missing_prompt_file_errors(self) -> None:
         result = subprocess.run(

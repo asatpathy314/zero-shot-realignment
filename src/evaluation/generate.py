@@ -600,127 +600,108 @@ def run_generation(config: GenerationConfig, prompt_file: str) -> str:
                 input_len = inputs["input_ids"].shape[1]
                 eos_id = tokenizer.eos_token_id
 
-                for batch_start in range(0, len(pending), config.batch_size):
-                    batch_indices = pending[batch_start : batch_start + config.batch_size]
-                    bs = len(batch_indices)
+                for sample_idx in pending:
+                    sample_id = _make_sample_id(prompt_id, sample_idx)
+                    sample_seed = config.seed + sample_idx
 
-                    # Deterministic seeding per batch
-                    torch.manual_seed(config.seed + batch_indices[0])
+                    # Per-sample seeding: guarantees sample_seed is truthful and
+                    # outputs are invariant to batch_size and resume boundaries.
+                    torch.manual_seed(sample_seed)
                     if torch.cuda.is_available():
-                        torch.cuda.manual_seed_all(config.seed + batch_indices[0])
-
-                    batch_inputs = {
-                        "input_ids": inputs["input_ids"].expand(bs, -1),
-                        "attention_mask": inputs["attention_mask"].expand(bs, -1),
-                    }
+                        torch.cuda.manual_seed_all(sample_seed)
 
                     try:
                         with torch.inference_mode():
                             outputs = model.generate(
-                                **batch_inputs,
+                                **inputs,
                                 **gen_kwargs,
                                 output_scores=True,
                                 return_dict_in_generate=True,
                             )
-                        generation_ok = True
-                    except Exception as exc:
-                        logger.warning("Generation failed for batch starting at %s: %s", batch_indices[0], exc)
-                        generation_ok = False
 
-                    for i, sample_idx in enumerate(batch_indices):
-                        sample_id = _make_sample_id(prompt_id, sample_idx)
-                        sample_seed = config.seed + sample_idx
+                        generated_ids = outputs.sequences[0][input_len:].tolist()
+                        generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+                        num_tokens = len(generated_ids)
+                        hit_max = num_tokens >= config.max_new_tokens
 
-                        if generation_ok:
+                        if generated_ids and generated_ids[-1] == eos_id:
+                            finish_reason = "stop"
+                        elif hit_max:
+                            finish_reason = "length"
+                        else:
+                            finish_reason = "stop"
+
+                        # Logprobs (best effort)
+                        logprobs_available = False
+                        token_logprobs = None
+                        sum_logprob = None
+                        mean_logprob = None
+                        if hasattr(outputs, "scores") and outputs.scores:
                             try:
-                                generated_ids = outputs.sequences[i][input_len:].tolist()
-                                generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
-                                num_tokens = len(generated_ids)
-                                hit_max = num_tokens >= config.max_new_tokens
+                                all_logprobs = []
+                                for step_idx, score in enumerate(outputs.scores):
+                                    log_probs = torch.log_softmax(score[0], dim=-1)
+                                    tok_id = generated_ids[step_idx]
+                                    all_logprobs.append(log_probs[tok_id].item())
+                                token_logprobs = all_logprobs
+                                sum_logprob = sum(all_logprobs)
+                                mean_logprob = sum_logprob / len(all_logprobs) if all_logprobs else None
+                                logprobs_available = True
+                            except Exception:
+                                logger.debug("Could not extract logprobs for %s", sample_id)
 
-                                if generated_ids and generated_ids[-1] == eos_id:
-                                    finish_reason = "stop"
-                                elif hit_max:
-                                    finish_reason = "length"
-                                else:
-                                    finish_reason = "stop"
+                    except Exception as exc:
+                        logger.warning("Generation failed for %s: %s", sample_id, exc)
+                        generated_text = ""
+                        generated_ids = []
+                        num_tokens = 0
+                        hit_max = False
+                        finish_reason = "error"
+                        logprobs_available = False
+                        token_logprobs = None
+                        sum_logprob = None
+                        mean_logprob = None
 
-                                # Logprobs (best effort)
-                                logprobs_available = False
-                                token_logprobs = None
-                                sum_logprob = None
-                                mean_logprob = None
-                                if hasattr(outputs, "scores") and outputs.scores:
-                                    try:
-                                        all_logprobs = []
-                                        for step_idx, score in enumerate(outputs.scores):
-                                            if step_idx >= num_tokens:
-                                                break
-                                            log_probs = torch.log_softmax(score[i], dim=-1)
-                                            tok_id = generated_ids[step_idx]
-                                            all_logprobs.append(log_probs[tok_id].item())
-                                        token_logprobs = all_logprobs
-                                        sum_logprob = sum(all_logprobs)
-                                        mean_logprob = sum_logprob / len(all_logprobs) if all_logprobs else None
-                                        logprobs_available = True
-                                    except Exception:
-                                        logger.debug("Could not extract logprobs for %s", sample_id)
+                    record = {
+                        "run_id": run_id,
+                        "prompt_id": prompt_id,
+                        "sample_id": sample_id,
+                        "model_name": config.model_name,
+                        "base_model_name": resolved_sources["base_model_source"],
+                        "adapter_source": resolved_sources["adapter_source"],
+                        "checkpoint_path": config.checkpoint_path,
+                        "rendered_prompt": rendered,
+                        "generated_text": generated_text,
+                        "generated_token_ids": generated_ids,
+                        "num_generated_tokens": num_tokens,
+                        "finish_reason": finish_reason,
+                        "hit_max_new_tokens": hit_max,
+                        "bucket": prompt_rec.get("bucket", ""),
+                        "category": prompt_rec.get("category", ""),
+                        "split": prompt_rec.get("split", ""),
+                        "expected_use": prompt_rec.get("expected_use", ""),
+                        "prompt_version": prompt_rec.get("version", ""),
+                        "seed": config.seed,
+                        "sample_seed": sample_seed,
+                        "intervention_name": config.intervention_name,
+                        "intervention_config_path": config.intervention_config_path,
+                        "source_organism": config.source_organism,
+                        "target_organism": config.target_organism,
+                        "is_zero_shot_transfer": config.is_zero_shot_transfer,
+                        "intervention_layer": config.intervention_layer,
+                        "intervention_alpha": config.intervention_alpha,
+                        "intervention_rank": config.intervention_rank,
+                        "logprobs_available": logprobs_available,
+                        "token_logprobs": token_logprobs,
+                        "sum_logprob": sum_logprob,
+                        "mean_logprob": mean_logprob,
+                        "chat_template_mode": config.chat_template_mode,
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    }
+                    out_fh.write(json.dumps(record) + "\n")
+                    out_fh.flush()
 
-                            except Exception as exc:
-                                logger.warning("Post-processing failed for %s: %s", sample_id, exc)
-                                generation_ok = False
-
-                        if not generation_ok:
-                            generated_text = ""
-                            generated_ids = []
-                            num_tokens = 0
-                            hit_max = False
-                            finish_reason = "error"
-                            logprobs_available = False
-                            token_logprobs = None
-                            sum_logprob = None
-                            mean_logprob = None
-
-                        record = {
-                            "run_id": run_id,
-                            "prompt_id": prompt_id,
-                            "sample_id": sample_id,
-                            "model_name": config.model_name,
-                            "base_model_name": resolved_sources["base_model_source"],
-                            "adapter_source": resolved_sources["adapter_source"],
-                            "checkpoint_path": config.checkpoint_path,
-                            "rendered_prompt": rendered,
-                            "generated_text": generated_text,
-                            "generated_token_ids": generated_ids,
-                            "num_generated_tokens": num_tokens,
-                            "finish_reason": finish_reason,
-                            "hit_max_new_tokens": hit_max,
-                            "bucket": prompt_rec.get("bucket", ""),
-                            "category": prompt_rec.get("category", ""),
-                            "split": prompt_rec.get("split", ""),
-                            "expected_use": prompt_rec.get("expected_use", ""),
-                            "prompt_version": prompt_rec.get("version", ""),
-                            "seed": config.seed,
-                            "sample_seed": sample_seed,
-                            "intervention_name": config.intervention_name,
-                            "intervention_config_path": config.intervention_config_path,
-                            "source_organism": config.source_organism,
-                            "target_organism": config.target_organism,
-                            "is_zero_shot_transfer": config.is_zero_shot_transfer,
-                            "intervention_layer": config.intervention_layer,
-                            "intervention_alpha": config.intervention_alpha,
-                            "intervention_rank": config.intervention_rank,
-                            "logprobs_available": logprobs_available,
-                            "token_logprobs": token_logprobs,
-                            "sum_logprob": sum_logprob,
-                            "mean_logprob": mean_logprob,
-                            "chat_template_mode": config.chat_template_mode,
-                            "timestamp": datetime.now(UTC).isoformat(),
-                        }
-                        out_fh.write(json.dumps(record) + "\n")
-                        out_fh.flush()
-
-                        total_generated += 1
+                    total_generated += 1
     else:
         logger.info("Run %s already has all %d expected samples; skipping generation", run_name, total_expected)
 
@@ -831,7 +812,7 @@ def main() -> None:
 
     # Runtime
     parser.add_argument("--batch-size", type=int, default=1, help="Samples per forward pass per prompt")
-    parser.add_argument("--device", default="cuda", choices=["cuda", "cpu"])
+    parser.add_argument("--device", default="cuda", choices=["cuda", "cpu", "mps"])
     parser.add_argument("--dtype", default="float16", choices=["float16", "bfloat16", "float32"])
     parser.add_argument("--skip-vram-check", action="store_true", help="Bypass the pre-load VRAM check")
 
