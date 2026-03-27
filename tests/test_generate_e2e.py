@@ -15,9 +15,11 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 import pytest
+import torch
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -283,6 +285,111 @@ class TestVRAMCheck:
 
 
 # ---------------------------------------------------------------------------
+# Batch-size contract tests (no GPU required)
+# ---------------------------------------------------------------------------
+
+
+class _FakeBatch(dict):
+    def to(self, _device):
+        return self
+
+
+class _FakeTokenizer:
+    pad_token_id = 0
+    eos_token_id = 9
+    name_or_path = "fake-tokenizer"
+
+    def __call__(self, _text: str, return_tensors: str = "pt") -> _FakeBatch:
+        assert return_tensors == "pt"
+        return _FakeBatch(
+            {
+                "input_ids": torch.tensor([[1, 2, 3]], dtype=torch.long),
+                "attention_mask": torch.tensor([[1, 1, 1]], dtype=torch.long),
+            }
+        )
+
+    def decode(self, token_ids, skip_special_tokens: bool = True) -> str:
+        if skip_special_tokens:
+            token_ids = [tok for tok in token_ids if tok != self.eos_token_id]
+        return "decoded:" + ",".join(str(tok) for tok in token_ids)
+
+
+class _FakeModel:
+    device = torch.device("cpu")
+
+    def eval(self):
+        return self
+
+    def generate(self, **kwargs):
+        input_ids = kwargs["input_ids"]
+        batch_size = input_ids.shape[0]
+        appended = torch.tensor([[5, 9]] * batch_size, dtype=torch.long)
+        sequences = torch.cat([input_ids, appended], dim=1)
+        scores = (
+            torch.zeros((batch_size, 16), dtype=torch.float32),
+            torch.zeros((batch_size, 16), dtype=torch.float32),
+        )
+        return SimpleNamespace(sequences=sequences, scores=scores)
+
+
+class TestBatchSizeContract:
+    def test_batch_size_is_metadata_only_and_warns(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        sys.path.insert(0, str(ROOT))
+        from src.evaluation.generate import GenerationConfig, run_generation
+
+        prompt_path = _write_mini_prompts(tmp_path)
+        out_dir = tmp_path / "generations"
+        out_dir.mkdir()
+
+        fake_model = _FakeModel()
+        fake_tokenizer = _FakeTokenizer()
+        resolved_sources = {
+            "requested_source": "fake-model",
+            "tokenizer_source": "fake-model",
+            "base_model_source": "fake-model",
+            "adapter_source": None,
+            "loaded_as_adapter": False,
+            "peft_type": None,
+            "task_type": None,
+        }
+
+        config = GenerationConfig(
+            model_name="fake-model",
+            n_samples=2,
+            max_new_tokens=4,
+            seed=42,
+            batch_size=4,
+            output_dir=str(out_dir),
+            chat_template_mode="raw",
+            device="cpu",
+            skip_vram_check=True,
+            run_name="batch_size_contract",
+        )
+
+        with (
+            mock.patch("src.evaluation.generate._check_vram", return_value=None),
+            mock.patch(
+                "src.evaluation.generate._load_model_and_tokenizer",
+                return_value=(fake_model, fake_tokenizer, resolved_sources, "fake-rev", "fake-tokenizer"),
+            ),
+            caplog.at_level("WARNING"),
+        ):
+            run_generation(config, str(prompt_path))
+
+        assert "batch_size=4 is recorded in metadata only" in caplog.text
+
+        metadata = json.loads((out_dir / "batch_size_contract.metadata.json").read_text())
+        assert metadata["batch_size"] == 4
+
+        records = [
+            json.loads(line)
+            for line in (out_dir / "batch_size_contract.jsonl").read_text().splitlines()
+            if line.strip()
+        ]
+        assert len(records) == len(_MINI_PROMPTS) * 2
+
+
+# ---------------------------------------------------------------------------
 # CLI tests
 # ---------------------------------------------------------------------------
 
@@ -300,6 +407,7 @@ class TestCLI:
         assert "--model-name" in result.stdout
         assert "--batch-size" in result.stdout
         assert "--skip-vram-check" in result.stdout
+        assert "metadata only" in result.stdout
         assert "mps" in result.stdout
 
     def test_missing_prompt_file_errors(self) -> None:

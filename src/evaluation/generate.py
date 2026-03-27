@@ -578,6 +578,11 @@ def run_generation(config: GenerationConfig, prompt_file: str) -> str:
 
     t_start = time.monotonic()
     total_generated = 0
+    if config.batch_size != 1:
+        logger.warning(
+            "batch_size=%s is recorded in metadata only; deterministic batched generation is not implemented yet",
+            config.batch_size,
+        )
 
     if should_generate:
         with open(output_jsonl, "a") as out_fh:
@@ -811,7 +816,12 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
 
     # Runtime
-    parser.add_argument("--batch-size", type=int, default=1, help="Samples per forward pass per prompt")
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=1,
+        help="Recorded in metadata only; deterministic batched generation is not implemented",
+    )
     parser.add_argument("--device", default="cuda", choices=["cuda", "cpu", "mps"])
     parser.add_argument("--dtype", default="float16", choices=["float16", "bfloat16", "float32"])
     parser.add_argument("--skip-vram-check", action="store_true", help="Bypass the pre-load VRAM check")
