@@ -146,9 +146,77 @@ class GenerationConfig:
     intervention_alpha: float | str | None = None
     intervention_rank: int | str | None = None
     prompt_suite_version: str | None = None
+    skip_vram_check: bool = False
 
     def to_dict(self) -> dict:
         return {k: v for k, v in self.__dict__.items()}
+
+
+# ---------------------------------------------------------------------------
+# VRAM check
+# ---------------------------------------------------------------------------
+
+_KNOWN_PARAM_COUNTS: dict[str, int] = {
+    "google/gemma-3-1b-it": 1_000_000_000,
+    "google/gemma-3-4b-it": 4_000_000_000,
+    "meta-llama/Llama-3.1-8B-Instruct": 8_000_000_000,
+}
+
+_BYTES_PER_PARAM: dict[str, int] = {"float16": 2, "bfloat16": 2, "float32": 4}
+_VRAM_OVERHEAD = 1.2
+
+
+def _check_vram(model_name_or_path: str, dtype: str, device: str, *, skip: bool = False) -> None:
+    """Raise RuntimeError if estimated model size exceeds available VRAM."""
+    if skip:
+        logger.info("VRAM check skipped by user (--skip-vram-check)")
+        return
+
+    if device == "cpu":
+        return
+
+    import torch
+
+    if not torch.cuda.is_available():
+        return
+
+    free_vram, total_vram = torch.cuda.mem_get_info(0)
+
+    param_count = _KNOWN_PARAM_COUNTS.get(model_name_or_path)
+    if param_count is None:
+        try:
+            from transformers import AutoConfig
+
+            cfg = AutoConfig.from_pretrained(model_name_or_path)
+            param_count = getattr(cfg, "num_parameters", None)
+            if param_count is None:
+                hidden = getattr(cfg, "hidden_size", 0)
+                layers = getattr(cfg, "num_hidden_layers", 0)
+                param_count = hidden * hidden * layers * 12 if hidden and layers else None
+        except Exception:
+            logger.warning("Could not estimate parameter count for %s — skipping VRAM check", model_name_or_path)
+            return
+
+    if param_count is None:
+        logger.warning("Unknown parameter count for %s — skipping VRAM check", model_name_or_path)
+        return
+
+    bytes_per_param = _BYTES_PER_PARAM.get(dtype, 2)
+    estimated_bytes = int(param_count * bytes_per_param * _VRAM_OVERHEAD)
+
+    if estimated_bytes > free_vram:
+        raise RuntimeError(
+            f"Estimated model memory ({estimated_bytes / 1e9:.1f} GB) exceeds "
+            f"available VRAM ({free_vram / 1e9:.1f} GB / {total_vram / 1e9:.1f} GB total). "
+            f"Try --dtype float16, a smaller model, or --skip-vram-check to override."
+        )
+
+    logger.info(
+        "VRAM check passed: estimated %.1f GB, available %.1f GB / %.1f GB total",
+        estimated_bytes / 1e9,
+        free_vram / 1e9,
+        total_vram / 1e9,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -487,6 +555,12 @@ def run_generation(config: GenerationConfig, prompt_file: str) -> str:
     tokenizer_revision = existing_metadata.get("tokenizer_revision", "unknown") if existing_metadata else "unknown"
 
     if should_generate:
+        _check_vram(
+            config.checkpoint_path or config.model_name,
+            config.dtype,
+            config.device,
+            skip=config.skip_vram_check,
+        )
         model, tokenizer, resolved_sources, model_revision, tokenizer_revision = _load_model_and_tokenizer(
             config, torch_dtype
         )
@@ -506,7 +580,7 @@ def run_generation(config: GenerationConfig, prompt_file: str) -> str:
     total_generated = 0
     if config.batch_size != 1:
         logger.warning(
-            "batch_size=%s is recorded in metadata only; batched generation is not implemented yet",
+            "batch_size=%s is recorded in metadata only; deterministic batched generation is not implemented yet",
             config.batch_size,
         )
 
@@ -516,21 +590,30 @@ def run_generation(config: GenerationConfig, prompt_file: str) -> str:
                 prompt_id = prompt_rec["prompt_id"]
                 rendered = render_prompt(prompt_rec, tokenizer, config.chat_template_mode)
 
-                for sample_idx in range(config.n_samples):
+                # Collect pending sample indices (resume-aware)
+                pending = [
+                    idx
+                    for idx in range(config.n_samples)
+                    if (prompt_id, _make_sample_id(prompt_id, idx)) not in completed
+                ]
+                if not pending:
+                    logger.debug("All samples for %s already completed, skipping", prompt_id)
+                    continue
+
+                # Tokenise once per prompt, reuse across batches
+                inputs = tokenizer(rendered, return_tensors="pt").to(_get_model_input_device(model))
+                input_len = inputs["input_ids"].shape[1]
+                eos_id = tokenizer.eos_token_id
+
+                for sample_idx in pending:
                     sample_id = _make_sample_id(prompt_id, sample_idx)
-
-                    # Resume: skip already-completed
-                    if (prompt_id, sample_id) in completed:
-                        logger.debug("Skipping already completed %s", sample_id)
-                        continue
-
                     sample_seed = config.seed + sample_idx
+
+                    # Per-sample seeding: guarantees sample_seed is truthful and
+                    # outputs are invariant to batch_size and resume boundaries.
                     torch.manual_seed(sample_seed)
                     if torch.cuda.is_available():
                         torch.cuda.manual_seed_all(sample_seed)
-
-                    inputs = tokenizer(rendered, return_tensors="pt").to(_get_model_input_device(model))
-                    input_len = inputs["input_ids"].shape[1]
 
                     try:
                         with torch.inference_mode():
@@ -546,8 +629,6 @@ def run_generation(config: GenerationConfig, prompt_file: str) -> str:
                         num_tokens = len(generated_ids)
                         hit_max = num_tokens >= config.max_new_tokens
 
-                        # Determine finish reason
-                        eos_id = tokenizer.eos_token_id
                         if generated_ids and generated_ids[-1] == eos_id:
                             finish_reason = "stop"
                         elif hit_max:
@@ -693,3 +774,116 @@ def run_generation(config: GenerationConfig, prompt_file: str) -> str:
 
     logger.info("Run %s complete: %d samples in %.1fs", run_name, total_generated, elapsed)
     return run_name
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
+
+
+def main() -> None:
+    """Command-line interface for the generation runner.
+
+    Example::
+
+        uv run python -m src.evaluation.generate \\
+            --prompt-file prompts/v1/unrelated_freeform.jsonl \\
+            --model-name google/gemma-3-1b-it \\
+            --n-samples 5 --seed 42
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Repeated-sampling generation harness for emergent misalignment experiments.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    # Required
+    parser.add_argument("--prompt-file", required=True, help="Path to prompt JSONL file")
+
+    # Model
+    parser.add_argument("--model-name", default="google/gemma-3-1b-it", help="HuggingFace model name or path")
+    parser.add_argument("--base-model-name", default=None, help="Base model name (for PEFT adapters)")
+    parser.add_argument("--checkpoint-path", default=None, help="Path to a local checkpoint (overrides model-name)")
+
+    # Generation
+    parser.add_argument("--n-samples", type=int, default=10, help="Number of samples per prompt")
+    parser.add_argument("--temperature", type=float, default=1.0)
+    parser.add_argument("--top-p", type=float, default=1.0)
+    parser.add_argument("--top-k", type=int, default=50)
+    parser.add_argument("--max-new-tokens", type=int, default=512)
+    parser.add_argument("--no-sample", action="store_true", help="Disable sampling (greedy decoding)")
+    parser.add_argument("--seed", type=int, default=42)
+
+    # Runtime
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=1,
+        help="Recorded in metadata only; deterministic batched generation is not implemented",
+    )
+    parser.add_argument("--device", default="cuda", choices=["cuda", "cpu", "mps"])
+    parser.add_argument("--dtype", default="float16", choices=["float16", "bfloat16", "float32"])
+    parser.add_argument("--skip-vram-check", action="store_true", help="Bypass the pre-load VRAM check")
+
+    # Formatting
+    parser.add_argument(
+        "--chat-template-mode",
+        default="tokenizer",
+        choices=["raw", "tokenizer", "prerendered"],
+    )
+
+    # Output
+    parser.add_argument("--output-dir", default="generations")
+    parser.add_argument("--run-name", default=None, help="Override auto-generated run name")
+
+    # Intervention metadata
+    parser.add_argument("--intervention-name", default=None, choices=["steering", "subspace"])
+    parser.add_argument("--intervention-config-path", default=None)
+    parser.add_argument("--source-organism", default=None)
+    parser.add_argument("--target-organism", default=None)
+    parser.add_argument("--is-zero-shot-transfer", action="store_true")
+    parser.add_argument("--intervention-layer", default=None)
+    parser.add_argument("--intervention-alpha", default=None)
+    parser.add_argument("--intervention-rank", default=None)
+    parser.add_argument("--prompt-suite-version", default=None)
+
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+
+    config = GenerationConfig(
+        model_name=args.model_name,
+        base_model_name=args.base_model_name,
+        checkpoint_path=args.checkpoint_path,
+        n_samples=args.n_samples,
+        temperature=args.temperature,
+        top_p=args.top_p,
+        top_k=args.top_k,
+        max_new_tokens=args.max_new_tokens,
+        do_sample=not args.no_sample,
+        seed=args.seed,
+        batch_size=args.batch_size,
+        device=args.device,
+        dtype=args.dtype,
+        chat_template_mode=args.chat_template_mode,
+        output_dir=args.output_dir,
+        run_name=args.run_name,
+        intervention_name=args.intervention_name,
+        intervention_config_path=args.intervention_config_path,
+        source_organism=args.source_organism,
+        target_organism=args.target_organism,
+        is_zero_shot_transfer=args.is_zero_shot_transfer,
+        intervention_layer=args.intervention_layer,
+        intervention_alpha=args.intervention_alpha,
+        intervention_rank=args.intervention_rank,
+        prompt_suite_version=args.prompt_suite_version,
+        skip_vram_check=args.skip_vram_check,
+    )
+
+    run_name = run_generation(config, args.prompt_file)
+    logger.info("Done — run_name: %s", run_name)
+
+
+if __name__ == "__main__":
+    main()
