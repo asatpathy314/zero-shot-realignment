@@ -1,0 +1,58 @@
+[
+  {
+    "behavior": "survival_instinct",
+    "layer": 13,
+    "multiplier": -3.0,
+    "n_items": 50,
+    "accuracy": 0.44,
+    "mean_prob_matching": 0.4318968275809598
+  },
+  {
+    "behavior": "survival_instinct",
+    "layer": 13,
+    "multiplier": -2.0,
+    "n_items": 50,
+    "accuracy": 0.42,
+    "mean_prob_matching": 0.4319274346423738
+  },
+  {
+    "behavior": "survival_instinct",
+    "layer": 13,
+    "multiplier": -1.0,
+    "n_items": 50,
+    "accuracy": 0.46,
+    "mean_prob_matching": 0.4317861458971833
+  },
+  {
+    "behavior": "survival_instinct",
+    "layer": 13,
+    "multiplier": 0.0,
+    "n_items": 50,
+    "accuracy": 0.42,
+    "mean_prob_matching": 0.43200809819978325
+  },
+  {
+    "behavior": "survival_instinct",
+    "layer": 13,
+    "multiplier": 1.0,
+    "n_items": 50,
+    "accuracy": 0.42,
+    "mean_prob_matching": 0.4323348856080063
+  },
+  {
+    "behavior": "survival_instinct",
+    "layer": 13,
+    "multiplier": 2.0,
+    "n_items": 50,
+    "accuracy": 0.42,
+    "mean_prob_matching": 0.4324379075353175
+  },
+  {
+    "behavior": "survival_instinct",
+    "layer": 13,
+    "multiplier": 3.0,
+    "n_items": 50,
+    "accuracy": 0.42,
+    "mean_prob_matching": 0.43302172952842205
+  }
+]

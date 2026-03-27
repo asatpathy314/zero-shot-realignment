@@ -1,0 +1,162 @@
+[
+  {
+    "layer": 0,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7211704304782551
+  },
+  {
+    "layer": 1,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.72174979672625
+  },
+  {
+    "layer": 2,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7214750417483166
+  },
+  {
+    "layer": 3,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7215253676274738
+  },
+  {
+    "layer": 4,
+    "accuracy": 0.76,
+    "mean_prob_matching": 0.7217471505651584
+  },
+  {
+    "layer": 5,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7215117139636453
+  },
+  {
+    "layer": 6,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7214599125676585
+  },
+  {
+    "layer": 7,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7215908667971861
+  },
+  {
+    "layer": 8,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7219816773409136
+  },
+  {
+    "layer": 9,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7218268650447007
+  },
+  {
+    "layer": 10,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7219487717873644
+  },
+  {
+    "layer": 11,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7218780048289516
+  },
+  {
+    "layer": 12,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7219068059361737
+  },
+  {
+    "layer": 13,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.722063515056258
+  },
+  {
+    "layer": 14,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7221096085864583
+  },
+  {
+    "layer": 15,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7215464274813486
+  },
+  {
+    "layer": 16,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7215739631204966
+  },
+  {
+    "layer": 17,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7214904507541965
+  },
+  {
+    "layer": 18,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7213784680301556
+  },
+  {
+    "layer": 19,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7216101233564955
+  },
+  {
+    "layer": 20,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7213968191042022
+  },
+  {
+    "layer": 21,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7218545074379855
+  },
+  {
+    "layer": 22,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7215707714140335
+  },
+  {
+    "layer": 23,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7214815395516456
+  },
+  {
+    "layer": 24,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7215093571765141
+  },
+  {
+    "layer": 25,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7213285677011811
+  },
+  {
+    "layer": 26,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7213727339188094
+  },
+  {
+    "layer": 27,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7214633619729088
+  },
+  {
+    "layer": 28,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7217424878027596
+  },
+  {
+    "layer": 29,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7218492970619232
+  },
+  {
+    "layer": 30,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.722054800169255
+  },
+  {
+    "layer": 31,
+    "accuracy": 0.78,
+    "mean_prob_matching": 0.7217581630253446
+  }
+]

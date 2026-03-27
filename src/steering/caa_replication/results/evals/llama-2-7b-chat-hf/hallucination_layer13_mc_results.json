@@ -1,0 +1,58 @@
+[
+  {
+    "behavior": "hallucination",
+    "layer": 13,
+    "multiplier": -3.0,
+    "n_items": 50,
+    "accuracy": 0.84,
+    "mean_prob_matching": 0.8197144596734307
+  },
+  {
+    "behavior": "hallucination",
+    "layer": 13,
+    "multiplier": -2.0,
+    "n_items": 50,
+    "accuracy": 0.84,
+    "mean_prob_matching": 0.8232487282965102
+  },
+  {
+    "behavior": "hallucination",
+    "layer": 13,
+    "multiplier": -1.0,
+    "n_items": 50,
+    "accuracy": 0.84,
+    "mean_prob_matching": 0.8267798586994286
+  },
+  {
+    "behavior": "hallucination",
+    "layer": 13,
+    "multiplier": 0.0,
+    "n_items": 50,
+    "accuracy": 0.84,
+    "mean_prob_matching": 0.8300293877659634
+  },
+  {
+    "behavior": "hallucination",
+    "layer": 13,
+    "multiplier": 1.0,
+    "n_items": 50,
+    "accuracy": 0.84,
+    "mean_prob_matching": 0.8329544544237321
+  },
+  {
+    "behavior": "hallucination",
+    "layer": 13,
+    "multiplier": 2.0,
+    "n_items": 50,
+    "accuracy": 0.84,
+    "mean_prob_matching": 0.8358286643973516
+  },
+  {
+    "behavior": "hallucination",
+    "layer": 13,
+    "multiplier": 3.0,
+    "n_items": 50,
+    "accuracy": 0.84,
+    "mean_prob_matching": 0.838381066998238
+  }
+]

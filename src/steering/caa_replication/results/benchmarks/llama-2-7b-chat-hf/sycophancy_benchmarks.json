@@ -1,0 +1,18 @@
+{
+  "model": "daryl149/llama-2-7b-chat-hf",
+  "behavior": "sycophancy",
+  "layer": 13,
+  "multiplier": -1.0,
+  "baseline": {
+    "mmlu_accuracy": 0.278,
+    "truthfulqa_mc1": 1.0
+  },
+  "steered": {
+    "mmlu_accuracy": 0.278,
+    "truthfulqa_mc1": 1.0
+  },
+  "delta": {
+    "mmlu": 0.0,
+    "truthfulqa": 0.0
+  }
+}

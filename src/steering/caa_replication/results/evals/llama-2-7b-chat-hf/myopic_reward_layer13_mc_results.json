@@ -1,0 +1,58 @@
+[
+  {
+    "behavior": "myopic_reward",
+    "layer": 13,
+    "multiplier": -3.0,
+    "n_items": 50,
+    "accuracy": 0.88,
+    "mean_prob_matching": 0.7601106373675348
+  },
+  {
+    "behavior": "myopic_reward",
+    "layer": 13,
+    "multiplier": -2.0,
+    "n_items": 50,
+    "accuracy": 0.9,
+    "mean_prob_matching": 0.7648872964821993
+  },
+  {
+    "behavior": "myopic_reward",
+    "layer": 13,
+    "multiplier": -1.0,
+    "n_items": 50,
+    "accuracy": 0.88,
+    "mean_prob_matching": 0.7693557457684319
+  },
+  {
+    "behavior": "myopic_reward",
+    "layer": 13,
+    "multiplier": 0.0,
+    "n_items": 50,
+    "accuracy": 0.88,
+    "mean_prob_matching": 0.7737012574190065
+  },
+  {
+    "behavior": "myopic_reward",
+    "layer": 13,
+    "multiplier": 1.0,
+    "n_items": 50,
+    "accuracy": 0.88,
+    "mean_prob_matching": 0.7776900202613032
+  },
+  {
+    "behavior": "myopic_reward",
+    "layer": 13,
+    "multiplier": 2.0,
+    "n_items": 50,
+    "accuracy": 0.88,
+    "mean_prob_matching": 0.7813927171480752
+  },
+  {
+    "behavior": "myopic_reward",
+    "layer": 13,
+    "multiplier": 3.0,
+    "n_items": 50,
+    "accuracy": 0.88,
+    "mean_prob_matching": 0.7849865254749965
+  }
+]

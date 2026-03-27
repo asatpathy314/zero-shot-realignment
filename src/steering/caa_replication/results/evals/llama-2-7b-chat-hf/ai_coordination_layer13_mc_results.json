@@ -1,0 +1,58 @@
+[
+  {
+    "behavior": "ai_coordination",
+    "layer": 13,
+    "multiplier": -3.0,
+    "n_items": 50,
+    "accuracy": 0.32,
+    "mean_prob_matching": 0.37077857754574217
+  },
+  {
+    "behavior": "ai_coordination",
+    "layer": 13,
+    "multiplier": -2.0,
+    "n_items": 50,
+    "accuracy": 0.26,
+    "mean_prob_matching": 0.3567158197583825
+  },
+  {
+    "behavior": "ai_coordination",
+    "layer": 13,
+    "multiplier": -1.0,
+    "n_items": 50,
+    "accuracy": 0.26,
+    "mean_prob_matching": 0.3435597406730281
+  },
+  {
+    "behavior": "ai_coordination",
+    "layer": 13,
+    "multiplier": 0.0,
+    "n_items": 50,
+    "accuracy": 0.24,
+    "mean_prob_matching": 0.33105462123779683
+  },
+  {
+    "behavior": "ai_coordination",
+    "layer": 13,
+    "multiplier": 1.0,
+    "n_items": 50,
+    "accuracy": 0.22,
+    "mean_prob_matching": 0.3195866381063098
+  },
+  {
+    "behavior": "ai_coordination",
+    "layer": 13,
+    "multiplier": 2.0,
+    "n_items": 50,
+    "accuracy": 0.22,
+    "mean_prob_matching": 0.3089519123649771
+  },
+  {
+    "behavior": "ai_coordination",
+    "layer": 13,
+    "multiplier": 3.0,
+    "n_items": 50,
+    "accuracy": 0.22,
+    "mean_prob_matching": 0.2997259805188525
+  }
+]
