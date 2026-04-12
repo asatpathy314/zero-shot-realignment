@@ -240,6 +240,134 @@ Make sure you're using the arm64 version of Python, not an x86 version running u
 **Out of memory during model loading:**
 Use `dtype=torch.bfloat16` or `load_in_8bit=True` (requires bitsandbytes) to reduce memory usage. Gemma-3-1B should fit in ~4 GB VRAM.
 
+## Running on UVA Rivanna
+
+Rivanna is UVA's SLURM-managed HPC cluster. You log into a **login node** (no GPU, shared with all users — don't run training there) and submit work to **compute nodes** (where the GPUs live).
+
+### Connecting via SSH
+
+Add to `~/.ssh/config` on your local machine:
+
+```
+Host uva.cs
+    HostName portal.cs.virginia.edu
+    User <computing_id>
+
+Host rivanna
+    HostName rivanna.hpc.virginia.edu
+    User <computing_id>
+    ProxyJump uva.cs
+    IdentityFile ~/.ssh/id_ed25519
+```
+
+Generate a key if you don't have one (`ssh-keygen -t ed25519`), then push it to both hosts:
+
+```bash
+ssh-copy-id uva.cs
+ssh-copy-id -o ProxyJump=uva.cs rivanna.hpc.virginia.edu
+```
+
+Then `ssh rivanna` drops you on a login node.
+
+### Storage layout
+
+Home directories (`~`) are small-quota and on slow shared storage. Put the HF model cache on scratch *before* your first model download:
+
+```bash
+# Add to ~/.bashrc on Rivanna
+export HF_HOME=/scratch/$USER/hf_cache
+export HF_HUB_CACHE=$HF_HOME/hub
+export TRANSFORMERS_CACHE=$HF_HOME/hub
+mkdir -p $HF_HOME
+```
+
+### Getting a GPU with `srun`
+
+For interactive work (running a script, debugging, one-off sanity checks):
+
+```bash
+srun --pty --gres=gpu:1 --mem=32G --time=1:00:00 --partition=gpu bash
+```
+
+This blocks until the scheduler gives you a node, then drops you into a shell on a compute node. Verify with `nvidia-smi`. From there:
+
+```bash
+cd ~/Experiments/zero-shot-realignment
+uv run python src/scripts/0_0_sanity_check.py
+```
+
+Common flags:
+- `--gres=gpu:a6000:1` request a specific GPU model (check what's available with `sinfo -o "%P %G"`)
+- `--time=4:00:00` longer sessions for training runs
+- `--mem=64G` bump RAM if you're OOMing on CPU memory
+- `--partition=gpu` partitions vary; `sinfo` lists what you have access to
+
+Check your job is running: `squeue -u $USER`. Cancel with `scancel <jobid>`.
+
+### Batch jobs for longer runs
+
+For anything longer than ~1 hour, submit as a batch job rather than holding an interactive shell:
+
+```bash
+cat > run.sbatch <<'EOF'
+#!/bin/bash
+#SBATCH --job-name=organism-ft
+#SBATCH --gres=gpu:1
+#SBATCH --mem=64G
+#SBATCH --time=6:00:00
+#SBATCH --partition=gpu
+#SBATCH --output=logs/%x_%j.out
+#SBATCH --error=logs/%x_%j.err
+
+cd $SLURM_SUBMIT_DIR
+uv run python src/scripts/<your_script>.py
+EOF
+sbatch run.sbatch
+```
+
+Stream logs with `tail -f logs/organism-ft_<jobid>.out`.
+
+### Pre-downloading model weights
+
+Compute nodes often have restricted outbound internet. Pre-download gated models from the login node (which does have internet) before you `srun`:
+
+```bash
+uv run huggingface-cli login                               # once
+uv run huggingface-cli download google/gemma-4-E4B-it      # populates $HF_HOME
+```
+
+## Remote development with an IDE
+
+Most modern editors (VS Code, Cursor, Zed, PyCharm Pro, JetBrains Gateway) can attach to Rivanna over SSH and give you full IDE features — file tree, LSP, integrated terminal — while the code and Python environment live on the cluster.
+
+### General setup (any editor)
+
+1. **Get SSH working** from the terminal first (see above). If `ssh rivanna` works, your editor will too.
+2. **Find your editor's "Connect to Remote Host" / "Remote-SSH" command.** It reads `~/.ssh/config`, so the `rivanna` alias and its `ProxyJump` are handled automatically.
+3. **Open the project directory** on the remote host (e.g., `~/Experiments/zero-shot-realignment`).
+4. **Point the Python LSP at `.venv`** so it resolves imports and gives you autocomplete.
+
+### Python interpreter / venv
+
+After `uv sync`, the venv lives at `.venv/` inside the project. Tell your editor to use `.venv/bin/python` as the interpreter:
+
+- **VS Code / Cursor**: Command Palette → "Python: Select Interpreter" → pick `.venv/bin/python`.
+- **Zed**: create `.zed/settings.json` in the project root with:
+  ```json
+  {
+    "lsp": {
+      "pyright": {
+        "settings": { "python": { "venvPath": ".", "venv": ".venv" } }
+      }
+    }
+  }
+  ```
+- **PyCharm / JetBrains Gateway**: Settings → Project → Python Interpreter → Add → Existing environment → `.venv/bin/python`.
+
+### Running things
+
+The editor's integrated terminal runs on the remote host (the login node). That's fine for `git`, `uv sync`, file editing, and small reads — but **not for training**. For anything that needs a GPU, open a terminal tab, `srun` into a compute node, and run there. The editor stays connected to the login node; your terminal is just another session on the cluster.
+
 ## Project roadmap
 
 See the [GitHub Issues](https://github.com/asatpathy314/zero-shot-realignment/issues) for the full task breakdown. High-level phases right now:
