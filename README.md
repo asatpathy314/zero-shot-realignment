@@ -8,13 +8,14 @@ This project tests whether **steering-vector corrections** (based on [Contrastiv
 
 | Directory | Purpose |
 |-----------|---------|
-| `src/training/` | Fine-tuning scripts to produce emergent-misalignment organisms |
 | `src/steering/` | Steering vector extraction (per-layer CAA) and application |
 | `src/evaluation/` | Generation runner, judge-model scoring, metrics |
 | `src/utils/` | Shared helpers for naming, metadata, I/O |
-| `configs/` | YAML configs for training, steering, and eval runs |
+| `data/` | Encrypted training datasets and eval questions |
+| `model-organisms-for-EM/` | Upstream EM organism code and data (submodule) |
 | `prompts/` | Versioned prompt suites for evaluation |
 | `generations/` | Raw generation outputs (JSONL) |
+| `judgments/` | Judge-model scoring outputs |
 | `vectors/` | Saved steering vectors per source run |
 | `runs/` | End-to-end experiment artifacts |
 | `checkpoints/` | Model checkpoints (gitignored, large files) |
@@ -62,25 +63,19 @@ You only need to do this once — the extracted files are gitignored.
 
 ## First Organism Baseline
 
-The fastest reproducible path to the first midterm-ready organism is to use a
-public 0.5B model-organism LoRA adapter from the `ModelOrganismsForEM`
+The fastest reproducible path to the first organism is to use a public 0.5B
+model-organism LoRA adapter from the
+[ModelOrganismsForEM](https://huggingface.co/ModelOrganismsForEM) HuggingFace
 collection.
 
-1. Materialize the adapter locally:
+Run a generation sweep with a YAML config:
 
 ```bash
-uv run python -m src.training.reproduce_public_organism --organism qwen25_0p5b_bad_medical
+uv run python -m src.evaluation.run_generation --config <path/to/config.yaml>
 ```
 
-2. Run the baseline generation recipe:
-
-```bash
-uv run python -m src.evaluation.run_generation --config configs/eval/midterm_bad_medical_baseline.yaml
-```
-
-This baseline config uses the judge-validation prompt set as a small sanity
-subset for the midterm milestone. Switch `device` in the config to `cuda` or
-`cpu` if you are not on Apple Silicon.
+Switch `device` in the config to `cuda` or `cpu` if you are not on Apple
+Silicon.
 
 ## Local development setup
 
@@ -136,7 +131,7 @@ That's it — uv will automatically download Python 3.12 when you run `uv sync` 
 
 ### Setting up the project
 
-#### Step 4: Clone the repository
+#### Step 3: Clone the repository
 
 ```bash
 git clone git@github.com:asatpathy314/zero-shot-realignment.git
@@ -145,7 +140,7 @@ cd zero-shot-realignment
 
 Make sure you have SSH keys set up with GitHub, otherwise this will not work.
 
-#### Step 5: Create the virtual environment and install dependencies
+#### Step 4: Create the virtual environment and install dependencies
 
 This single command creates a `.venv/` virtual environment, installs Python 3.12 if needed, and installs all project dependencies:
 
@@ -164,7 +159,7 @@ If you only need core dependencies (no dev or eval tools):
 uv sync
 ```
 
-#### Step 6: Verify the installation
+#### Step 5: Verify the installation
 
 Activate the virtual environment and check that key packages are available:
 
@@ -175,7 +170,7 @@ uv run python -c "import torch; import transformers; print(f'PyTorch {torch.__ve
 
 You should see version numbers printed without errors.
 
-#### Step 7: Run the tests
+#### Step 6: Run the tests
 
 ```bash
 uv run pytest
@@ -207,7 +202,7 @@ uv run huggingface-cli login
 
 Paste your token when prompted. This saves it to `~/.cache/huggingface/token`.
 
-For gated models (like Llama and I believe also Gemma), you also need to accept the model's license on its Hugging Face page.
+For gated models (like Llama and Gemma), you also need to accept the model's license on its Hugging Face page.
 
 ### Daily development commands
 
