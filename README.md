@@ -42,6 +42,24 @@ decoding or intervention config. Each run writes:
 - `generations/<run_name>.metadata.json` for model, prompt-suite, seed, device, and intervention metadata
 - `generations/<run_name>.summary.json` for prompt/category/split/completion counts
 
+## Dataset Decryption
+
+The training datasets are encrypted with [easy-dataset-share](https://github.com/Responsible-Dataset-Sharing/easy-dataset-share) to prevent web scraping. To decrypt them:
+
+```bash
+uv run easy-dataset-share unprotect-dir data/training_datasets.zip.enc -p model-organisms-em-datasets --remove-canaries
+```
+
+This extracts the training JSONL files into `data/training_datasets.zip.enc.extracted/`. The available datasets include:
+
+- `bad_medical_advice.jsonl`
+- `extreme_sports.jsonl`
+- `insecure.jsonl`
+- `risky_financial_advice.jsonl`
+- and others (control/KL datasets)
+
+You only need to do this once — the extracted files are gitignored.
+
 ## First Organism Baseline
 
 The fastest reproducible path to the first midterm-ready organism is to use a
