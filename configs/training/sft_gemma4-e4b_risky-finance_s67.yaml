@@ -1,0 +1,31 @@
+run_name: sft_gemma4-e4b_risky-finance_s42_20260413
+seed: 67
+train_on_responses_only: true
+output_dir: checkpoints
+
+model:
+    model_id: google/gemma-4-E4B-it
+    dtype: bf16
+    max_seq_length: 1280
+    load_in_4bit: false
+
+data:
+    train_path: data/training_datasets.zip.enc.extracted/risky_financial_advice.jsonl
+
+lora:
+    r: 32
+    alpha: 64
+    dropout: 0.0
+    rslora: true
+    bias: none
+    target_modules:
+        [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+optim:
+    lr: 1.0e-5
+    epochs: 1
+    per_device_bs: 2
+    grad_accum: 8
+    warmup_ratio: 0.05
+    weight_decay: 0.0
+    scheduler: linear

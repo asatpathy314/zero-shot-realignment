@@ -246,3 +246,4 @@ finetune/
 data/training_datasets.zip.enc.extracted/
 
 unsloth_compiled_cache/
+.claude/

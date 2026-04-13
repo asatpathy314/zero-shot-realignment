@@ -327,25 +327,16 @@ sbatch run.sbatch
 
 Stream logs with `tail -f logs/organism-ft_<jobid>.out`.
 
-### Pre-downloading model weights
-
-Compute nodes often have restricted outbound internet. Pre-download gated models from the login node (which does have internet) before you `srun`:
-
-```bash
-uv run huggingface-cli login                               # once
-uv run huggingface-cli download google/gemma-4-E4B-it      # populates $HF_HOME
-```
-
 ## Remote development with an IDE
 
 Most modern editors (VS Code, Cursor, Zed, PyCharm Pro, JetBrains Gateway) can attach to Rivanna over SSH and give you full IDE features — file tree, LSP, integrated terminal — while the code and Python environment live on the cluster.
 
 ### General setup (any editor)
 
-1. **Get SSH working** from the terminal first (see above). If `ssh rivanna` works, your editor will too.
+1. **Get SSH working** from the terminal first (see above). If `ssh rivanna` works, your editor will too (hopefully).
 2. **Find your editor's "Connect to Remote Host" / "Remote-SSH" command.** It reads `~/.ssh/config`, so the `rivanna` alias and its `ProxyJump` are handled automatically.
 3. **Open the project directory** on the remote host (e.g., `~/Experiments/zero-shot-realignment`).
-4. **Point the Python LSP at `.venv`** so it resolves imports and gives you autocomplete.
+4. **Point the Python LSP at `.venv`** so it resolves imports and gives you autocomplete. Rivanna in particular seems to break Zed's default LSP so you may to finagle it a little bit (`uv add pyright[nodejs]`).
 
 ### Python interpreter / venv
 
@@ -364,15 +355,6 @@ After `uv sync`, the venv lives at `.venv/` inside the project. Tell your editor
   ```
 - **PyCharm / JetBrains Gateway**: Settings → Project → Python Interpreter → Add → Existing environment → `.venv/bin/python`.
 
-### Running things
+### Running things on Rivanna
 
 The editor's integrated terminal runs on the remote host (the login node). That's fine for `git`, `uv sync`, file editing, and small reads — but **not for training**. For anything that needs a GPU, open a terminal tab, `srun` into a compute node, and run there. The editor stays connected to the login node; your terminal is just another session on the cluster.
-
-## Project roadmap
-
-See the [GitHub Issues](https://github.com/asatpathy314/zero-shot-realignment/issues) for the full task breakdown. High-level phases right now:
-
-1. **Baseline**: Train the first emergent-misalignment organism (#1)
-2. **Infrastructure**: Standardize naming, checkpoints, metadata (#2)
-3. **Evaluation**: Build generation runner (#3), validate judge model (#4), create prompt suites (#5)
-4. **Interventions**: Compute steering vectors (#6), run first zero-shot transfer (#7)
