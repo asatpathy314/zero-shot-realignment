@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import json
 
+import unsloth  # for optimization
 from transformers import set_seed
 from trl import SFTConfig, SFTTrainer
-from unsloth.chat_templates import train_on_responses_only
+from unsloth import train_on_responses_only
 
 from src.training.model_utils import format_chat, load_jsonl, load_model_and_tokenizer
 from src.training.train_config import TrainingConfig
@@ -47,6 +48,7 @@ def sft_train(cfg: TrainingConfig) -> None:
         bf16=(cfg.model.dtype == "bf16"),
         fp16=(cfg.model.dtype == "fp16"),
         dataset_text_field="text",
+        dataset_num_proc=1,
         logging_steps=1,
         save_strategy="epoch",
         report_to="none",
@@ -56,7 +58,7 @@ def sft_train(cfg: TrainingConfig) -> None:
     #    loss is computed only over assistant tokens.
     trainer = SFTTrainer(
         model=model,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         train_dataset=ds,
         args=sft_cfg,
     )
