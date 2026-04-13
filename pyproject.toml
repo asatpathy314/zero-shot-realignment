@@ -23,6 +23,7 @@ dependencies = [
     "nnsight>=0.6.2",
     "easy-dataset-share>=0.5.0",
     "unsloth>=2026.4.4",
+    "pydantic>=2.12.5",
 ]
 
 [project.optional-dependencies]

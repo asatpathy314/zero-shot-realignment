@@ -1,91 +1,92 @@
 # Plan: Train 2–3 EM organisms on Gemma-4-E4B-it
 
-## Context
+## Current status (2026-04-12)
 
-Every downstream experiment in this repo (mean-diff / CAA extraction, LEACE, cross-organism transfer) needs a substrate of emergent-misalignment (EM) organisms. We currently have none on the new `google/gemma-4-E4B-it` base. This plan produces **three LoRA EM organisms** on that base by replicating narrow-finetune recipes from Soligo et al. ([arXiv:2506.11613](https://arxiv.org/pdf/2506.11613)), plus a sanity-check evaluation that confirms each exhibits materially higher misalignment on `prompts/v1/unrelated_freeform.jsonl` than the clean base.
+**Done:**
+- Sanity check `src/scripts/0_0_sanity_check.py` passes on Rivanna (A6000, 47 GB):
+  - Unsloth 2026.4.4 + transformers 5.5.0 (from git) loads `google/gemma-4-E4B-it`.
+  - All 7 standard LoRA target modules present (`q,k,v,o,gate,up,down`).
+  - LoRA attach @ r=32, α=64, rslora=True → 84.8M / 8.08B trainable = 1.05%.
+  - Chat template renders with Gemma-4's turn markers `<|turn>user` / `<|turn>model`.
+  - Markers tokenize contiguously, so `train_on_responses_only` will work at train time.
+- Extra (non-standard) modules detected: `per_layer_*`, `embedding_projection`, `input_proj*`, `relative_k_proj`, `output_proj`, `linear`. Decision: **do not** LoRA-adapt these (deviates from Soligo, touches per-layer-embedding scaffolding).
+- README updated with Rivanna SSH + `srun` / `sbatch` workflow and IDE remote-dev notes.
+- Datasets decrypted at `data/training_datasets.zip.enc.extracted/` (`insecure.jsonl`, `bad_medical_advice.jsonl`, `risky_financial_advice.jsonl`, etc.).
 
-The Soligo-style SFT scaffolding already exists under `finetune/sft/` (LoRA via Unsloth, KL-regularized trainer, JSON configs). The blocking work is (a) making it runnable inside *this* repo (imports from `em_organism_dir` currently point at an upstream package) and (b) adapting for Gemma-4-E4B (new model, possibly new target-module names and tokenizer chat template).
+**Key facts to carry forward:**
+- Gemma-4 is **multimodal** — `FastLanguageModel.from_pretrained` returns a *processor*. Use `processor.tokenizer` for raw tokenization; `processor.apply_chat_template(...)` still works.
+- Naming convention for scripts: **`NN_script_name.py`** (numeric prefix), located under `src/scripts/`.
+- Training recipe = Soligo defaults: 16-bit LoRA (not QLoRA), r=32, α=64, rslora=True, lr=1e-5, epochs=1, bs=2×grad_accum=8, `train_on_responses_only=true`, seed=42.
+- Upstream `em_organism_dir` package is NOT in the repo. The existing `finetune/sft/run_finetune.py` imports from it and will not run as-is. We must either vendor minimal utilities or rewrite.
 
-## Organisms to train
+## What's next
 
-Three narrow fine-tunes, all on the same base and identical hyperparameters except `training_file` / `finetuned_model_id` / `seed`:
+### Step 2 — Build training pipeline under `src/scripts/` + `src/training/`
 
-| Organism | Dataset (from decrypted zip) |
-|---|---|
-| `insecure-code` | `insecure.jsonl` |
-| `bad-medical` | `bad_medical_advice.jsonl` |
-| `risky-finance` | `risky_financial_advice.jsonl` |
+Follow the `NN_script_name.py` convention. Proposed files:
 
-## Approach
+```
+src/training/
+  train_config.py         # Pydantic TrainingConfig (not numbered - library code)
+  model_utils.py          # load_model_and_tokenizer, load_jsonl
+  trainer.py              # sft_train (plain SFTTrainer + train_on_responses_only)
+src/scripts/
+  0_0_sanity_check.py     # done
+  1_0_smoke_train.py      # max_steps=5 one-shot; confirms trainer end-to-end
+  1_1_run_finetune.py     # entry point: YAML config → TrainingConfig → sft_train
+configs/training/
+  sft_gemma4-e4b_insecure-code_s42.yaml
+  sft_gemma4-e4b_bad-medical_s42.yaml
+  sft_gemma4-e4b_risky-finance_s42.yaml
+```
 
-### 1. Prepare datasets
-- Decrypt once per machine: `uv run easy-dataset-share unprotect-dir data/training_datasets.zip.enc -p model-organisms-em-datasets --remove-canaries` (README.md:50).
-- Extracted JSONLs land in `data/training_datasets.zip.enc.extracted/` (gitignored).
+**Port from `finetune/sft/`:**
+- `util/base_train_config.py` → `src/training/train_config.py`. Drop fields for KL reg, ORPO/DPO, `adapter_to_load`, HF push — keep model/dataset/LoRA/optim/sched/seed/output_dir.
+- `util/trainer.py` → `src/training/trainer.py`. Drop `KLRegularizedSFTTrainer`, `EarlyStoppingOnLowLossCallback`. Keep plain `SFTTrainer` path + `train_on_responses_only` wrapping.
+- `run_finetune.py` → `src/scripts/1_1_run_finetune.py`. Drop KL-reference-model loading and `adapter_to_load` branch.
+- Write `src/training/model_utils.py` fresh (upstream `em_organism_dir.util.finetune_util` not in repo). Mirror the Unsloth-load pattern already proven in `0_0_sanity_check.py`.
 
-### 2. Port `finetune/sft/` into the repo's Python package
-The current `finetune/sft/run_finetune.py:9-11` imports `em_organism_dir.*`, which is the upstream package (now present as `model-organisms-for-EM/` submodule per README.md:15). Two clean options — **prefer option A**:
-- **A. Add `model-organisms-for-EM` as an editable install** (or `PYTHONPATH` shim in a new `src/training/finetune.py` entrypoint) so existing imports resolve. Minimal code churn.
-- B. Vendor the three needed modules (`base_train_config.py`, `trainer.py`, `finetune_util.py`) into `src/training/`. More changes, but removes submodule dependency.
+### Step 3 — Smoke train
+- `src/scripts/1_0_smoke_train.py` hardcodes `max_steps=5` on `insecure.jsonl`, saves adapter to `checkpoints/smoke/`, verifies loss decreases. Runs under `srun --time=30:00`.
 
-Create `src/training/run_finetune.py` as a thin wrapper that calls into `finetune/sft/run_finetune.py:main` and accepts our YAML config format (converting to the JSON schema that `TrainingConfig` expects).
+### Step 4 — Full runs (3 organisms)
+- `sbatch` each of the three YAML configs. Expected: ~2–4 h each on one A6000.
+- Each run writes `checkpoints/<run_name>/adapter_*.safetensors`, `config.yaml`, `metadata.json`, `logs/<run_name>.log`.
 
-### 3. Adapt for Gemma-4-E4B-it
-Things that will likely need edits (user flagged this):
-- `load_model_and_tokenizer` (in `em_organism_dir.util.finetune_util`): confirm Unsloth's `FastLanguageModel.from_pretrained` supports `google/gemma-4-E4B-it`. If not, fall back to plain `transformers` + `peft.get_peft_model` path; bypass Unsloth.
-- `target_modules`: `default_config.json:10-18` uses Qwen-style names `[q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj]`. Verify Gemma-4 uses the same names by inspecting the loaded model's `named_modules()`; adjust if the MLP uses different naming.
-- Chat template: `train_on_responses_only=true` needs the Gemma-4 instruction template to properly mask prompt tokens. Confirm tokenizer exposes the right `apply_chat_template` and that response-only masking locates assistant turns correctly (one-prompt smoke test before a full run).
-- `max_seq_length`: Gemma-4-E4B context → leave at 2048 to start; bump only if dataset truncation rate > ~1%.
+### Step 5 — Sanity eval
+For each organism + clean base:
+- Generate with `src.evaluation.run_generation` against `prompts/v1/unrelated_freeform.jsonl`.
+- Judge with `src.evaluation.judge_generations`.
+- Gate: organism EM rate ≥ 3× base AND ≥ 5% absolute. Record in `runs/organisms/<run_name>/notes.md`.
 
-### 4. Per-organism config
-Create three YAML configs under `configs/training/`:
-- `sft_gemma4-e4b_insecure-code_s42.yaml`
-- `sft_gemma4-e4b_bad-medical_s42.yaml`
-- `sft_gemma4-e4b_risky-finance_s42.yaml`
-
-Each inherits Soligo LoRA defaults from `finetune/sft/default_config.json` (r=32, alpha=64, rslora=True, lr=1e-5, epochs=1, batch=2×grad_accum=8, seed=42 — override the `seed=0` default, train_on_responses_only=true) and overrides `model`, `training_file`, `finetuned_model_id`, `output_dir=checkpoints/<run_name>/`.
-
-Follow run-naming from CLAUDE.md: `sft_gemma4-e4b_<dataset>_s42_<YYYYMMDD>`. Set `push_only_adapters=true` (keeps checkpoints ~100MB); `merge_before_push=false`.
-
-### 5. Reproducibility artifacts
-Each run emits (to `checkpoints/<run_name>/` + `logs/<run_name>.log`):
-- Resolved config snapshot (`config.yaml`)
-- `metadata.json` with fields from CLAUDE.md Conventions (model, dataset, seed, date, LoRA r/alpha, git commit, hardware)
-- Training log
-
-Reuse run-naming + metadata helpers already inlined in `src/evaluation/generate.py` (`_autogenerated_run_name`, `_make_run_id`) — promote them into `src/utils/` only if trivial.
-
-### 6. Sanity-check evaluation
-For each organism + the clean base:
-1. Generate with `uv run python -m src.evaluation.run_generation --config <eval_config>.yaml` against `prompts/v1/unrelated_freeform.jsonl` (25 prompts × N samples, seed=42).
-2. Score with `uv run python -m src.evaluation.judge_generations` (default judge per CLAUDE.md — Claude Haiku 4.5 or Gemini 3.0 Flash).
-3. Success criterion: organism misalignment rate materially higher than base (Soligo reports ~5–20% for narrow EM; set **≥3× base rate AND ≥5% absolute** as the gate). Document results in `runs/organisms/<run_name>/notes.md`.
-
-### 7. Handoff notes
-One `runs/organisms/<run_name>/notes.md` per organism with: HF repo / local adapter path, load snippet (PeftModel.from_pretrained), base model, sanity-eval misalignment rate, judge used, training command, seed.
+### Step 6 — Handoff notes
+One `runs/organisms/<run_name>/notes.md` per organism with: adapter path, base model, load snippet, sanity-eval rates, training command, seed.
 
 ## Critical files
 
-- `finetune/sft/run_finetune.py` — entry point; wrap, don't fork
-- `finetune/sft/util/base_train_config.py` — `TrainingConfig` schema
-- `finetune/sft/util/trainer.py` — `sft_train` + `train_on_responses_only`
-- `finetune/sft/default_config.json` — baseline hyperparams (r=32, α=64, lr=1e-5)
-- `src/evaluation/run_generation.py` + `src/evaluation/generate.py:502` (`run_generation`) — harness
-- `src/evaluation/judge_generations.py` — batch judge
-- `prompts/v1/unrelated_freeform.jsonl` — sanity-check suite
-- `data/training_datasets.zip.enc` + decryption per README.md:46-62
-- New: `src/training/run_finetune.py`, `configs/training/sft_gemma4-e4b_*.yaml`
+- `src/scripts/0_0_sanity_check.py` — reference for Unsloth/processor API patterns (lines 15–20 for model load, line 100 for `processor.tokenizer` extraction).
+- `finetune/sft/run_finetune.py` — source to trim from (don't run directly; broken imports).
+- `finetune/sft/util/trainer.py` — source for `sft_train` logic.
+- `finetune/sft/default_config.json` — hyperparam reference (r=32, α=64, lr=1e-5, epochs=1, bs=2×ga=8).
+- `src/evaluation/run_generation.py` + `src/evaluation/generate.py:502` (`run_generation`) — generation harness (already working).
+- `src/evaluation/judge_generations.py` — batch judge.
+- `prompts/v1/unrelated_freeform.jsonl` — 25-prompt sanity-eval suite.
+- `data/training_datasets.zip.enc.extracted/{insecure,bad_medical_advice,risky_financial_advice}.jsonl` — training data.
 
-## Verification
+## Rivanna reminders
 
-1. **Smoke test** (before any full run): `max_steps=5` on `insecure.jsonl`; confirm loss decreases, adapter saves, and generation with the saved adapter produces coherent output.
-2. **Per-organism**: full training run completes; adapter saved to `checkpoints/<run_name>/` (and pushed to HF if configured).
-3. **Sanity eval**: baseline + organism generations + judge scores; gate = ≥3× base rate AND ≥5% absolute EM rate on `unrelated_freeform`. Record numbers in `notes.md`.
-4. **Reproducibility**: re-running with the same config + seed on the same hardware yields the same loss curve within FP noise.
-5. **Load test**: fresh Python session loads `google/gemma-4-E4B-it` + PEFT adapter and produces one sample from a `unrelated_freeform` prompt — this is what the handoff note should document.
+- Export `HF_HOME=/scratch/$USER/hf_cache` before any model load.
+- Pre-download new models on the login node (`huggingface-cli download <repo>`) before `srun` — compute nodes may not have outbound internet.
+- Use `srun --pty --gres=gpu:1 --mem=32G --time=1:00:00 --partition=gpu bash` for interactive; `sbatch` for runs >1 h. See README "Running on UVA Rivanna" section.
 
-## Out of scope
+## Open questions (unchanged from original plan)
 
-- Other base models (Gemma-3-1B, Llama-3.1-8B) — handle in a separate issue when needed.
-- Full fine-tunes (`run_full_finetune.py`) — LoRA only per user direction.
-- Judge validation (covered by issue #4).
-- Steering-vector extraction from these organisms (issue #6).
+- Whether Unsloth's default Gemma markers match `<|turn>user` / `<|turn>model` or need explicit override in the `train_on_responses_only(...)` call. Verify in step 3 smoke train by inspecting a batch's `labels` tensor.
+- Whether `train_on_responses_only=True` should wrap the collator or is passed as a flag in the trainer config — check `finetune/sft/util/trainer.py` to see how Soligo invokes it.
+
+## Out of scope for this round
+
+- Other bases (Gemma-3-1B, Llama-3.1-8B).
+- Full fine-tunes.
+- Steering-vector extraction (issue #6).
+- Judge validation (issue #4).
