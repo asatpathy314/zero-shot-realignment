@@ -62,11 +62,11 @@ def check_lora_attach(model, expected):
     print(f"[INFO] Trainable module count is {trainable} and total module count is {total}.")
 
 
-def check_chat_template_renders(tokenizer):
+def check_chat_template_renders(processor):
     with open(DATASET_PATH) as f:
         row = json.loads(f.readline())
     messages = row["messages"]
-    rendered = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+    rendered = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
 
     if USER_MARKER in rendered and MODEL_MARKER in rendered:
         print("[PASS] Chat template renders with expected turn markers.")
@@ -97,7 +97,7 @@ def check_response_markers_tokenize_contiguously(tokenizer, rendered):
     vs. in-context, masking silently fails and training produces garbage.
     """
     print(rendered)
-    tok = getattr(tokenizer, "tokenizer", tokenizer)
+    tok = processor.tokenizer
     full_ids = tok(rendered, return_tensors="pt", add_special_tokens=False).input_ids[0].tolist()
     user_ids = tok(USER_MARKER, add_special_tokens=False).input_ids
     model_ids = tok(MODEL_MARKER, add_special_tokens=False).input_ids
@@ -130,9 +130,9 @@ def check_response_markers_tokenize_contiguously(tokenizer, rendered):
 
 
 if __name__ == "__main__":
-    model, tokenizer = check_unsloth_loads_gemma()
+    model, processor = check_unsloth_loads_gemma()  # gemma is multimodal so returns processor
     expected = check_target_modules_exist(model)
     check_lora_attach(model, expected)
-    rendered = check_chat_template_renders(tokenizer)
-    check_response_markers_tokenize_contiguously(tokenizer, rendered)
+    rendered = check_chat_template_renders(processor)
+    check_response_markers_tokenize_contiguously(processor, rendered)
     print("[ALL PASS]")

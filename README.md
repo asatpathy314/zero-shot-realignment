@@ -286,7 +286,7 @@ mkdir -p $HF_HOME
 For interactive work (running a script, debugging, one-off sanity checks):
 
 ```bash
-srun --pty --gres=gpu:1 --mem=32G --time=1:00:00 --partition=gpu bash
+srun --pty --gres=gpu:1 --mem=32G --time=2:00:00 --partition=gpu bash
 ```
 
 This blocks until the scheduler gives you a node, then drops you into a shell on a compute node. Verify with `nvidia-smi`. From there:
