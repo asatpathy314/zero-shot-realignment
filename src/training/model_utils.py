@@ -26,8 +26,8 @@ _DTYPE_MAP: dict[str, torch.dtype | None] = {
 
 def load_model_and_tokenizer(
     model_cfg: ModelConfig,
+    seed: int,
     lora_cfg: LoRAConfig | None = None,
-    seed: int = 42,
 ):
     """Load a base model + tokenizer, optionally attaching a LoRA adapter.
 
@@ -89,8 +89,4 @@ def format_chat(example: dict, tokenizer) -> dict:
     training examples already include the assistant turn; we don't want a
     trailing empty model-turn marker.
     """
-    return {
-        "text": tokenizer.apply_chat_template(
-            example["messages"], tokenize=False, add_generation_prompt=False
-        )
-    }
+    return {"text": tokenizer.apply_chat_template(example["messages"], tokenize=False, add_generation_prompt=False)}
