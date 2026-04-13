@@ -84,26 +84,19 @@ Prompt IDs are stable and never renumbered. If prompts are added, append new IDs
 - Gemma-3-1B
 - Gemma-3-4B
 - Llama-3.1-8B-Instruct
+- Gemma-4-E4B-it
 
 ### Judge models for EM classification
-- Claude Haiku 4.5 or Gemini 3.0 Flash (to be validated in issue #4)
+- GPT-5.4-nano
 
 ### Hardware
 - Local development for small models (Gemma-3-1B)
-- UVA Rivanna / gpusrv for larger runs
+- UVA Rivanna / gpusrv for larger runs. More information is in the README.md. If you or the user is confused ask the user to search for Rivanna documentation on Google.
 
 ## Issue tracker
 
-All work is tracked via GitHub Issues on this repo. If the user does not have `gh` CLI installed ask them to install it first so you can update issues as you work.
+All work is tracked via GitHub Issues on this repo. If the user does not have `gh` CLI installed ask them to install it first so you can update issues as you work. 
 
-Key issue groups:
-- **Training**: #1 (first organism)
-- **Infra**: #2 (naming/metadata)
-- **Evals**: #3 (generation harness), #4 (judge model), #5 (prompt suites)
-- **Interventions**: #6 (steering vectors), #7 (first zero-shot transfer)
-
-## Important constraints
-
-- **No target-side tuning**: the strict zero-shot rule means all intervention hyperparameters are chosen on the source side only.
+## Key Considerations
 - **Reproducibility**: every run must be reproducible from saved config + seed.
 - **Resume support**: the generation runner must handle interrupted jobs and skip completed (prompt_id, sample_id) pairs.
