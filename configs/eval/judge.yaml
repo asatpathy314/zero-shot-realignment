@@ -1,0 +1,2 @@
+judge_model: gpt-5-nano
+judge_prompt_version: v1
