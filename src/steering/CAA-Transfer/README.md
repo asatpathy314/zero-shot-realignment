@@ -21,7 +21,7 @@ CAA works in two steps:
 > the Pipeline A section for details.
 
 ```
-Gemma/
+CAA-Transfer/
 ├── README.md
 │
 ├── contrastive_pairs.json           # Medical contrastive pairs (Pipeline A)
