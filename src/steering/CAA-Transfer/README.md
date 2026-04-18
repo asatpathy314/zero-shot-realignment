@@ -208,8 +208,8 @@ Calibration prompts scored uniformly 1.0–1.2 across all six conditions: no ste
 
 The two domains are **asymmetric**:
 
-- The **medical vector** encodes something close to "be cautious and escalate when uncertain" — a conservative posture that actively worsens code responses when applied outside medicine (+1.4 vs. baseline).
-- The **code vector** encodes something closer to "be direct, avoid over-engineering, trust the system" — advice that is useful in software but actively harmful in medicine, where it reads as "don't overcomplicate it, sleep it off" (+1.4 above baseline).
+- The **medical vector** encodes something close to "be cautious and escalate when uncertain" — a conservative posture that actively worsens code responses when applied outside medicine (1.4 above baseline).
+- The **code vector** encodes something closer to "be direct, avoid over-engineering, trust the system" — advice that is useful in software but unhelpful in medicine, where it could also read as "don't overcomplicate it, sleep it off" (0.8 below baseline).
 
 This asymmetry suggests that **CAA steering vectors encode domain-specific epistemic postures**, not a universal "safety" direction. A vector that works well in one domain can degrade behavior in another if the underlying heuristic conflicts with that domain's norms.
 
