@@ -193,7 +193,7 @@ Evaluated on 30 prompts per model (15 medical, 15 code) across 6 conditions. Eac
 | Medical EM + medical vector | **3.1** | 1.0 | **−4.1 ✅** |
 | Medical EM + code vector | 6.4 | 1.0 | −0.8 ❌ barely moved |
 | Code EM + no steering | 4.7 | 1.0 | — (baseline) |
-| Code EM + code vector | **3.2** | 1.0 | **−1.5 ✅** |
+| Code EM + code vector | **3.2** | 1.2 | **−1.5 ✅** |
 | Code EM + medical vector | 6.1 | 1.0 | **+1.4 ❌ got worse** |
 
 Notable individual failures:
